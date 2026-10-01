@@ -1,4 +1,4 @@
-.PHONY: build test tidy kind-reset kind-test test-cover
+.PHONY: build test tidy release-check kind-reset kind-test
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
@@ -8,11 +8,12 @@ build:
 test:
 	go test ./...
 
-test-cover:
-	go test -coverprofile=coverage.out -count=1 ./...
-
 tidy:
 	go mod tidy
+
+release-check:
+	go test ./...
+	go build -o bin/kubescrub ./cmd/kubescrub
 
 kind-reset:
 	./scripts/kind.sh reset

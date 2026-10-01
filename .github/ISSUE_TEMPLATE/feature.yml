@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a new feature for KubeScrub
+title: "Feature: "
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Describe what you'd like to see and why.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which area?
+      description: "Which checker or command does this relate to?"
+      options:
+        - workload checker
+        - pvc checker
+        - crd checker
+        - rbac checker
+        - scan command
+        - apply command
+        - other
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What problem does this solve?
+      description: "Describe the problem and how this feature would address it."
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: "Describe how you'd like this feature to work. Include CLI flags, output format, or behavior changes."

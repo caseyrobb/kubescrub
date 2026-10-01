@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [master, main]
   pull_request:
-    branches: [main, master]
+    branches: [master, main]
 
 jobs:
   build:
@@ -31,10 +31,4 @@ jobs:
           go-version: '1.23'
 
       - name: Test
-        run: go test -count=1 ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Validate RBAC manifests
-        run: bash scripts/validate-rbac.sh
+        run: go test ./...

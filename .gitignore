@@ -1,33 +1,37 @@
 # Build output
 bin/
+dist/
+coverage.out
 
 # Kubernetes kubeconfigs
 *.kubeconfig
 
 # KubeScrub plan files (output of `kubescrub scan`)
 *.plan.json
+**/tmp/*.plan.json
 
-# Kind cluster state
-.kube/
+# Pre-release audit (stale after tagging)
+docs/audit.md
 
-# Local OpenCode provider keys / config with private endpoints
-.opencode/provider-*.json
-.opencode/oh-my-opencode-slim.json
-
-# Editor / IDE junk
+# Editor and OS junk
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
-*.sublime-project
-*.sublime-workspace
-
-# OS temp
-.DS_Store
 Thumbs.db
 
-# Local env / secrets (safety net)
+# Coverage output
+coverage.out
+
+# Local OpenCode provider keys and config with private endpoints
+.opencode/provider-*.json
+.opencode/oh-my-opencode-slim.json
+
+# Environment / secrets
 .env
 .env.*
+
+# OpenCode config with private endpoints (local dev only)
+opencode.jsonc

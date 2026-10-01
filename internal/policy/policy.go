@@ -92,5 +92,9 @@ func Load(path string) (*Policy, error) {
 	if p.Thresholds.UnusedReplicaSetAge == 0 {
 		p.Thresholds.UnusedReplicaSetAge = def.Thresholds.UnusedReplicaSetAge
 	}
+	// Merge Apply defaults.
+	if p.Apply.RequireAnnotation == "" {
+		p.Apply.RequireAnnotation = def.Apply.RequireAnnotation
+	}
 	return &p, nil
 }

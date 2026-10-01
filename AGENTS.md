@@ -1,6 +1,12 @@
 # KubeScrub
 
-Operator-facing quickstart and CLI reference: [README.md](README.md)
+Developer reference. For operator instructions, see [README.md](README.md).
+
+- [License](LICENSE) — MIT, Copyright (c) 2026 Casey Robb
+- [Security policy](SECURITY.md)
+- [CI workflow](.github/workflows/ci.yml) — runs `go test` and `go build` on push/PR
+- [Release workflow](.github/workflows/release.yml) — cross-compiles on `v*` tags
+- [RBAC manifests](deploy/) — scan and apply identities
 
 ## For developers
 
@@ -26,6 +32,7 @@ Operator-facing quickstart and CLI reference: [README.md](README.md)
 make build    # go build -o bin/kubescrub ./cmd/kubescrub
 make test     # go test ./...
 make tidy     # go mod tidy
+make release-check  # test + build for pre-release verification
 make kind-reset    # scripts/kind.sh reset (Podman Kind cluster)
 make kind-test     # go test -tags=kind ./internal/app/...
 ```
@@ -37,6 +44,15 @@ make kind-test     # go test -tags=kind ./internal/app/...
 3. Register in `internal/app/registry.go`
 4. Add `testdata/fixtures/<check>/`
 5. `go test ./internal/checks/...`
+
+### OpenCode config
+
+`opencode.jsonc` and `.opencode/` are local development aids. They may stay in the repo only if they contain **no** API keys or private endpoints. If either file references a local `baseURL` or contains credentials:
+
+1. Add a `.gitignore` entry for that file.
+2. Remove the secret/baseURL from the file.
+
+The current `opencode.jsonc` contains a private endpoint (`http://spark.redcomet.ca:8000/v1`) and must be gitignored.
 
 ### Plan document
 

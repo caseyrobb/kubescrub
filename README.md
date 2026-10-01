@@ -1,61 +1,54 @@
 # KubeScrub
 
-KubeScrub is a Kubernetes cluster hygiene scanner that finds stale resources and over-permissive RBAC. It produces a versioned JSON Plan (`kubescrub.io/v1`) and performs deletions only through an opt-in apply command gated by safety checks — **report is the product, apply is optional**.
+KubeScrub is a Kubernetes cluster hygiene scanner. It produces a versioned JSON Plan documenting stale resources and over-permissive RBAC. Deletions happen only through the apply command and are gated by multiple safety checks — **report is the product, apply is opt-in**.
 
-## Example finding
+> **Safety:** scan is read-only only when run with the `kubescrub-scan` ServiceAccount (via `kubectl --as=`). Running with a user kubeconfig has full read access to that context. Apply deletes only objects annotated with `kubescrub.io/allow-delete=true` and only when `--apply --yes` is provided.
 
-```json
-{
-  "id": "workload-completed-job|kubescrub-messy|Job|completed-job|batch/v1",
-  "check": "workload",
-  "severity": "info",
-  "cluster": "kind-kubescrub-dev",
-  "namespace": "kubescrub-messy",
-  "version": "batch/v1",
-  "kind": "Job",
-  "name": "completed-job",
-  "message": "Job kubescrub-messy/completed-job has completed with no active pods",
-  "reason": "completed-job",
-  "suggestedAction": "delete",
-  "risk": "Completed jobs consume cluster storage and audit noise",
-  "safeToApply": true,
-  "evidence": {
-    "active": 0,
-    "succeeded": 1,
-    "failed": 0
-  }
-}
-```
+## What scan reports
 
-## Installation
+KubeScrub runs four built-in checkers:
 
-### Go install
+| Checker | What it finds |
+|---------|---------------|
+| `workload` | Zero-replica Deployments/StatefulSets, missing image tags, orphan ReplicaSets, deprecated API versions |
+| `pvc` | Unbound (pending) PVCs, bound PVCs with no active pod mounting |
+| `crd` | Deprecated CRD versions, CR objects not on the storage version |
+| `rbac` | Unused roles, wildcard permissions, escalation verbs, cluster-admin bindings |
+
+## What apply can delete
+
+Apply can delete resources that pass all safety gates and carry the annotation `kubescrub.io/allow-delete=true`:
+
+- Completed Jobs
+- ReplicaSets without a Deployment owner (orphan)
+
+## What KubeScrub will never delete
+
+| Kind | Reason |
+|------|--------|
+| `CustomResourceDefinition` | Hard-block (code-level) |
+| `ClusterRole` | Hard-block (code-level) |
+| `ClusterRoleBinding` | Hard-block (code-level) |
+| `Role` | Hard-block (code-level) |
+| `RoleBinding` | Hard-block (code-level) |
+| `Deployment` | `SafeToApply` is always `false` |
+| `StatefulSet` | `SafeToApply` is always `false` |
+| `PersistentVolumeClaim` (Bound/Available) | `SafeToApply` is `false` for bound PVCs |
+| `Job` | `SafeToApply` is `false` |
+
+Additional execution gates: `SuggestedAction` must be `"delete"`, the live object must have the `kubescrub.io/allow-delete=true` annotation, and the namespace must not be in `policy.yaml`'s `excludeNamespaces`.
+
+## Build and test
 
 ```bash
-go install github.com/caseyrobb/kubescrub@latest
-```
-
-> **Release binaries:** Download pre-built binaries from [Releases](https://github.com/caseyrobb/kubescrub/releases) once the first tagged release is published.
-
-### From source
-
-```bash
-git clone https://github.com/caseyrobb/kubescrub.git
-cd kubescrub
-make build
+make build      # go build -o bin/kubescrub ./cmd/kubescrub
+make test       # go test ./...
+make tidy       # go mod tidy
 ```
 
 Requires Go 1.23+.
 
-## License
-
-[MIT](LICENSE.md) — Copyright (c) 2025 KubeScrub contributors.
-
-## Quick start
-
-### Scan
-
-Scan the current kubeconfig context:
+## Scan
 
 ```bash
 kubescrub scan
@@ -69,108 +62,63 @@ kubescrub scan --policy my-policy.yaml
 | `--policy` | `policy.yaml` | Path to policy configuration file |
 | `--out` | stdout | Write Plan JSON to FILE |
 | `--namespaces` | all | Comma-separated list of namespaces to scan |
-| `--format` | json | Output format (currently only JSON) |
+| `--format` | json | Output format (only `json` is supported) |
 
-The scan command runs four checkers:
+## Apply
 
-| Checker | What it finds |
-|---------|--------------|
-| `workload` | Zero-replica Deployments/StatefulSets, image tags, orphan ReplicaSets, deprecated APIs |
-| `pvc` | Unbound (pending) PVCs, bound PVCs with no active pod mounting |
-| `crd` | Deprecated CRD versions, CR objects not on the storage version |
-| `rbac` | Unused roles, wildcard permissions, escalation verbs, cluster-admin bindings |
-
-### Apply
-
-Dry-run first (default — nothing is deleted):
+Dry-run (`--apply` not set) performs server-side dry-run deletes and prints a summary. Nothing is deleted.
 
 ```bash
 kubescrub apply --plan plan.json
 ```
 
-Perform real deletions:
+Real deletion:
 
 ```bash
 kubescrub apply --plan plan.json --apply --yes
 kubescrub apply --plan plan.json --checks workload,pvc --apply --yes
 kubescrub apply --plan plan.json --reason completed-job --apply --yes
 kubescrub apply --plan plan.json --namespace kubescrub-messy --apply --yes
-kubescrub apply --plan plan.json --max-plan-age 1h --context kind-dev --apply --yes
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--plan` | _(required)_ | Path to scan report JSON file |
-| `--checks` | all | Comma-separated check names (`workload,pvc,crd,rbac`) |
-| `--reason` | all | Comma-separated finding reasons |
-| `--namespace` | all | Exact namespace; cluster-scoped findings stay included |
-| `--max-plan-age` | `24h` | Refuse plans older than this duration |
+| `--checks` | all | Comma-separated check names to include |
+| `--reason` | all | Comma-separated finding reasons to include |
+| `--namespace` | all | Exact namespace; cluster-scoped findings kept |
+| `--max-plan-age` | `24h` | Maximum age of the scan plan |
 | `--context` | none | Require kube context to match `plan.cluster` |
+| `--apply` | false | Enable real deletion (requires `--yes`) |
+| `--yes` | false | Acknowledge real deletion |
 
-Dry-run runs server-side dry-run deletes and prints a summary. `--apply --yes` triggers real deletions.
+### Refuse rules
 
-## What KubeScrub will not delete
+Real deletion (`--apply --yes`) **refuses** when any guard is violated:
 
-KubeScrub enforces multiple safety gates. The following resource types are **never deleted**:
+1. `--yes` not provided — `--apply` without `--yes` is always an error.
+2. Plan age exceeds `--max-plan-age` (default 24h).
+3. `--context` does not match `plan.cluster`.
 
-| Category | Resource kinds |
-|----------|---------------|
-| Hard-block (code-level) | `CustomResourceDefinition`, `ClusterRole`, `ClusterRoleBinding`, `Role`, `RoleBinding` |
-| Workloads | `Deployment`, `StatefulSet` (all have `SafeToApply=false`) |
-| Bound PVCs | `PersistentVolumeClaim` in `Bound` or `Available` state |
-| Jobs | `Job` has `SafeToApply=false` |
+Dry-run mode continues with warnings only.
 
-At execution time, additional gates are applied:
+## RBAC identities
 
-1. `SuggestedAction` must be `"delete"`
-2. `SafeToApply` must be `true`
-3. The live object must carry the annotation `kubescrub.io/allow-delete=true`
-4. Namespace must not be excluded in `policy.yaml`
-5. Plan must not exceed `--max-plan-age`
-6. `--context` must match `plan.cluster` (when set)
-
-## Policy configuration
-
-KubeScrub reads a YAML policy file (`--policy`, default `policy.yaml`):
-
-```yaml
-excludeNamespaces:
-  - kube-system
-  - kube-public
-  - kube-node-lease
-  - local-path-storage
-thresholds:
-  completedJobAge: 1s
-  failedJobAge: 1s
-  pendingPVCAge: 1s
-  unusedPVCAge: 1s
-  unusedReplicaSetAge: 1s
-rbac:
-  flagWildcards: true
-  flagClusterAdmin: true
-  ignoreSubjects:
-    - system:serviceaccount:kube-system:replicaset-controller
-apply:
-  requireAnnotation: "kubescrub.io/allow-delete=true"
-```
-
-## RBAC
-
-Deploy least-privilege ClusterRoles for scan and apply operations:
+Install least-privilege ClusterRoles for scan and apply operations:
 
 ```bash
 kubectl apply -f deploy/rbac-scan.yaml
 kubectl apply -f deploy/rbac-apply.yaml
 ```
 
-| Operation | ClusterRole | ServiceAccount | Verbs |
-|-----------|------------|----------------|-------|
-| scan | `kubescrub-scan` | `kubescrub-scan` | get, list, watch (read-only) |
-| apply | `kubescrub-apply` | `kubescrub-apply` | get, list, delete (jobs, replicasets, PVCs only) |
+| Identity | ServiceAccount | Verbs |
+|----------|---------------|-------|
+| scan | `kubescrub-scan` (in `kubescrub-system`) | get, list, watch |
+| apply | `kubescrub-apply` (in `kubescrub-system`) | get, list, delete (jobs, replicasets, PVCs only) |
 
-See `deploy/rbac-scan.yaml` and `deploy/rbac-apply.yaml` for full manifests. Uncomment the `ClusterRoleBinding` sections to bind them to users or service accounts.
+> **Never reuse the scan identity for apply.** They are separate ClusterRoles and ServiceAccounts.
 
-> **Never reuse the scan identity for apply.** They are separate ClusterRoles and separate ServiceAccounts.
+See [`deploy/rbac-scan.yaml`](deploy/rbac-scan.yaml) and [`deploy/rbac-apply.yaml`](deploy/rbac-apply.yaml) for full manifests. Uncomment the `ClusterRoleBinding` sections to bind them to users or service accounts.
 
 ## Podman Kind (testing)
 
@@ -182,17 +130,8 @@ go test -tags=kind ./internal/app/...
 
 Cluster: `kubescrub-dev` · Context: `kind-kubescrub-dev` · Fixture: `testdata/clusters/messy.yaml`
 
-Run with automatic cluster reset:
+See [`testdata/clusters/README.md`](testdata/clusters/README.md) for details.
 
-```bash
-KUBESCRUB_KIND_AUTO=1 go test -tags=kind ./internal/app/...
-```
+## License
 
-## Building & testing
-
-```bash
-make build      # go build -o bin/kubescrub ./cmd/kubescrub
-make test       # go test ./...
-make test-cover # go test -coverprofile=coverage.out -count=1 ./...
-make tidy       # go mod tidy
-```
+[MIT](LICENSE) — Copyright (c) 2026 Casey Robb.

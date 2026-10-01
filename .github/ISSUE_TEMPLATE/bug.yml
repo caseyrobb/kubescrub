@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a bug in KubeScrub
+title: "Bug: "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For security issues, use [GitHub Security Advisories](https://github.com/caseyrobb/kubescrub/security/advisories/new) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: KubeScrub version
+      description: "Run `kubescrub --version` or check the binary. If built from source, include the commit or tag."
+      placeholder: "e.g. v0.1.0 or dev"
+
+  - type: input
+    id: k8s-version
+    attributes:
+      label: Kubernetes version
+      description: "Run `kubectl version --short` or `kubectl version`."
+      placeholder: "e.g. v1.31.0"
+
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Which command?
+      description: "Did the issue occur during scan or apply?"
+      options:
+        - scan
+        - apply
+      multiple: false
+
+  - type: dropdown
+    id: apply-used
+    attributes:
+      label: Was --apply used?
+      description: "If the issue is with apply, was --apply --yes used or just dry-run?"
+      options:
+        - "Yes, --apply --yes (real deletion)"
+        - "Dry-run only (--apply not set)"
+        - "N/A — issue is with scan"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: "Describe the bug, what you expected, and steps to reproduce."
+      placeholder: "1. Run kubescrub scan\n2. ...\n3. Expected: ...\nActual: ..."
+
+  - type: textarea
+    id: plan-output
+    attributes:
+      label: Relevant output
+      description: "Paste the scan or apply output, or a snippet of the Plan JSON."
+      render: json
