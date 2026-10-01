@@ -1,0 +1,51 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "spark": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Spark DGX (vLLM)",
+      "options": {
+        "baseURL": "http://spark.redcomet.ca:8000/v1",
+        "apiKey": "EMPTY"
+      },
+      "models": {
+        "Qwen3.6-35B-A3B-NVFP4": {
+          "name": "Qwen3.6-35B-A3B-NVFP4",
+          "capabilities": {
+            "tools": true,
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "model": "spark/Qwen3.6-35B-A3B-NVFP4",
+  "small_model": "spark/Qwen3.6-35B-A3B-NVFP4",
+  "default_agent": "orchestrator",
+  "lsp": true,
+  "mcp": {
+    "servers": {
+      "context7": {},
+      "gh_grep": {}
+    }
+  },
+  "plugins": [
+    "oh-my-opencode-slim"
+  ],
+  "permission": {
+    "edit": "allow",
+    "bash": "ask"
+  },
+  "watcher": {
+    "ignore": [
+      "**/.git/**",
+      "**/bin/**",
+      "**/.idea/**"
+    ]
+  }
+}

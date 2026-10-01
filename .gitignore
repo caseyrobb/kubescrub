@@ -1,0 +1,33 @@
+# Build output
+bin/
+
+# Kubernetes kubeconfigs
+*.kubeconfig
+
+# KubeScrub plan files (output of `kubescrub scan`)
+*.plan.json
+
+# Kind cluster state
+.kube/
+
+# Local OpenCode provider keys / config with private endpoints
+.opencode/provider-*.json
+.opencode/oh-my-opencode-slim.json
+
+# Editor / IDE junk
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# OS temp
+.DS_Store
+Thumbs.db
+
+# Local env / secrets (safety net)
+.env
+.env.*

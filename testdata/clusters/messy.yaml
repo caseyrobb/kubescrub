@@ -1,0 +1,373 @@
+# KubeScrub Kind fixture.
+# Apply twice: CRD first, then the Widget CR after Established.
+# KIND_EXPERIMENTAL_PROVIDER=podman kind create cluster --name kubescrub-dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubescrub-messy
+  labels:
+    kubescrub.io/fixture: "true"
+---
+# Zero-replica Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zero-web
+  namespace: kubescrub-messy
+  labels:
+    app: zero-web
+    kubescrub.io/case: zero-replicas
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1beta1","kind":"Deployment","metadata":{"name":"zero-web","namespace":"kubescrub-messy"},"spec":{"replicas":0,"selector":{"matchLabels":{"app":"zero-web"}},"template":{"metadata":{"labels":{"app":"zero-web"}},"spec":{"containers":[{"name":"pause","image":"registry.k8s.io/pause:3.10"}]}}}}
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: zero-web
+  template:
+    metadata:
+      labels:
+        app: zero-web
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+---
+# Zero-replica StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zero-db
+  namespace: kubescrub-messy
+  labels:
+    app: zero-db
+    kubescrub.io/case: zero-replicas
+spec:
+  replicas: 0
+  serviceName: zero-db
+  selector:
+    matchLabels:
+      app: zero-db
+  template:
+    metadata:
+      labels:
+        app: zero-db
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+---
+# Live Deployment so an extra ReplicaSet is clearly leftover history
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: live-web
+  namespace: kubescrub-messy
+  labels:
+    app: live-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: live-web
+  template:
+    metadata:
+      labels:
+        app: live-web
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+---
+# Orphan / leftover ReplicaSet (no ownerRef, 0 replicas)
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: live-web-legacy
+  namespace: kubescrub-messy
+  labels:
+    app: live-web-legacy
+    pod-template-hash: oldhash
+    kubescrub.io/case: old-replicaset
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: live-web-legacy
+      pod-template-hash: oldhash
+  template:
+    metadata:
+      labels:
+        app: live-web-legacy
+        pod-template-hash: oldhash
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.9
+---
+# Completed Job, no TTL
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: old-success
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: old-job
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: done
+          image: registry.k8s.io/e2e-test-images/busybox:1.36.1-1
+          command: ["sh", "-c", "exit 0"]
+---
+# Failed Job, no TTL
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: old-failed
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: old-job
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fail
+          image: registry.k8s.io/e2e-test-images/busybox:1.36.1-1
+          command: ["sh", "-c", "exit 1"]
+---
+# Unbound / Pending PVC (StorageClass does not exist)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pending-unbound
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: unbound-pvc
+spec:
+  storageClassName: kubescrub-does-not-exist
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Bound but unused PVC (manual hostPath PV, no Pod mounts it)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kubescrub-manual-pv
+  labels:
+    kubescrub.io/case: unused-pvc
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: kubescrub-manual
+  hostPath:
+    path: /tmp/kubescrub-manual-pv
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: unused-bound
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: unused-pvc
+spec:
+  storageClassName: kubescrub-manual
+  volumeName: kubescrub-manual-pv
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# SA that exists so the cluster-admin binding is real
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: messy-admin
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-cluster-admin
+---
+# Cluster-admin binding for the test SA
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubescrub-messy-admin
+  labels:
+    kubescrub.io/case: rbac-cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: messy-admin
+    namespace: kubescrub-messy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+---
+# Wildcard Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: messy-wildcard
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-wildcard
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: messy-wildcard
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-wildcard
+subjects:
+  - kind: ServiceAccount
+    name: messy-admin
+    namespace: kubescrub-messy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: messy-wildcard
+---
+# Role bound to a ServiceAccount that is never created
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: messy-dangling
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-dangling-subject
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: messy-dangling
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-dangling-subject
+subjects:
+  - kind: ServiceAccount
+    name: does-not-exist
+    namespace: kubescrub-messy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: messy-dangling
+---
+# Unused Role (no RoleBinding)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: messy-unused
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-unused-role
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+---
+# Privilege-escalation-style Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: messy-escalate
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-escalate
+rules:
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["bind", "escalate", "impersonate"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: messy-escalate
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: rbac-escalate
+subjects:
+  - kind: ServiceAccount
+    name: messy-admin
+    namespace: kubescrub-messy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: messy-escalate
+---
+# CRD: deprecated served v1alpha1, storage v1
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: widgets.scrub.kubescrub.io
+  labels:
+    kubescrub.io/case: crd-deprecated
+spec:
+  group: scrub.kubescrub.io
+  scope: Namespaced
+  names:
+    plural: widgets
+    singular: widget
+    kind: Widget
+    listKind: WidgetList
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: false
+      deprecated: true
+      deprecationWarning: "widgets.scrub.kubescrub.io/v1alpha1 is deprecated; use v1"
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                color:
+                  type: string
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                color:
+                  type: string
+---
+# Object still stored/requested on the deprecated version
+apiVersion: scrub.kubescrub.io/v1alpha1
+kind: Widget
+metadata:
+  name: rusty
+  namespace: kubescrub-messy
+  labels:
+    kubescrub.io/case: cr-deprecated-version
+spec:
+  color: rust

@@ -1,0 +1,148 @@
+# KubeScrub scan identity: least-privilege ClusterRole for cluster scanning.
+#
+# The scan command only needs read-only access (get/list/watch).
+# This manifest does NOT include create/update/patch/delete/bind/escalate/impersonate.
+#
+# Install:
+#   kubectl apply -f deploy/rbac-scan.yaml
+#
+# To activate, uncomment the ClusterRoleBinding below and update the
+# user reference to match your kubeconfig user or group.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubescrub-system
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: scan
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubescrub-scan
+  namespace: kubescrub-system
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: scan
+---
+# ClusterRole kubescrub-scan — read-only cluster scanning.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubescrub-scan
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: scan
+rules:
+  # ── core resources ────────────────────────────────────────────────
+  - apiGroups: [""]
+    resources: ["pods", "persistentvolumeclaims", "persistentvolumes", "namespaces", "serviceaccounts", "configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # ── apps workload resources ───────────────────────────────────────
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+
+  # ── batch jobs ────────────────────────────────────────────────────
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+
+  # ── RBAC resources ────────────────────────────────────────────────
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+
+  # ── CRD definitions ───────────────────────────────────────────────
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+
+  # ── nonResourceURLs for API discovery ─────────────────────────────
+  - nonResourceURLs: ["/api", "/api/*", "/apis", "/apis/*"]
+    verbs: ["get"]
+
+---
+# ── Optional: ClusterRole for listing CR instances ──────────────────
+#
+# REQUIRED if you use the crd checker (it dynamically lists CR instance
+# resources via the dynamic client). This is still read-only — verbs
+# are get and list only. Do NOT bind this role unless you need the crd
+# checker to discover custom resource instances.
+#
+# To install separately:
+#   kubectl apply -f deploy/rbac-scan.yaml
+# # Then uncomment the binding below and set your user.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubescrub-scan-cr
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: scan-cr
+    app.kubernetes.io/part-of: kubescrub-scan
+rules:
+  # Wildcard read-only access to ALL resource types. Used by the crd
+  # checker to list custom resource instances on each GVR.
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list"]
+
+---
+# ── Optional: ClusterRole for Helm release manifests ────────────────
+#
+# ONLY needed if you want the workload checker to inspect Helm release
+# Secrets or ConfigMaps for deprecated API version references. This
+# role is NOT bound by default — uncomment only when you have Helm
+# releases in the cluster and want KubeScrub to flag deprecated APIs
+# stored as manifest data in Helm resources.
+#
+# To install separately:
+#   kubectl apply -f deploy/rbac-scan.yaml
+# # Then uncomment the binding below and set your user.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubescrub-scan-helm
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: scan-helm
+    app.kubernetes.io/part-of: kubescrub-scan
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list"]
+
+---
+# ── ClusterRoleBinding for kubescrub-scan ──────────────────────────
+#
+# Uncomment and update the user reference to bind this ClusterRole to
+# a kubeconfig user or group. The user must exist in your kubeconfig.
+#
+# Example: kubectl --user=alice@company.com kubescrub scan
+# Or:      kubectl --as=system:serviceaccount:kubescrub-system:kubescrub-scan kubescrub scan
+#
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: kubescrub-scan-binding
+#   labels:
+#     app.kubernetes.io/name: kubescrub
+#     app.kubernetes.io/component: scan
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: kubescrub-scan
+# subjects:
+#   - kind: User
+#     name: "<YOUR_KUBECONFIG_USER>"       # replace with your kubeconfig user
+#     apiGroup: rbac.authorization.k8s.io
+#
+# To bind to a group instead:
+#   - kind: Group
+#     name: "<YOUR_GROUP>"
+#     apiGroup: rbac.authorization.k8s.io

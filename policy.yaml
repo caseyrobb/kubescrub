@@ -1,0 +1,18 @@
+excludeNamespaces:
+  - kube-system
+  - kube-public
+  - kube-node-lease
+  - local-path-storage
+thresholds:
+  completedJobAge: 1s
+  failedJobAge: 1s
+  pendingPVCAge: 1s
+  unusedPVCAge: 1s
+  unusedReplicaSetAge: 1s
+rbac:
+  flagWildcards: true
+  flagClusterAdmin: true
+  ignoreSubjects:
+    - system:serviceaccount:kube-system:replicaset-controller
+apply:
+  requireAnnotation: "kubescrub.io/allow-delete=true"

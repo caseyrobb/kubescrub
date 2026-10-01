@@ -1,0 +1,107 @@
+# KubeScrub apply identity: least-privilege ClusterRole for applying
+# deletion plans.
+#
+# WARNING: Do NOT reuse the kubescrub-scan ServiceAccount for apply.
+# The scan identity is read-only; the apply identity needs delete.
+# Always use a separate ServiceAccount.
+#
+# The apply command has additional safety gates enforced in code:
+#   - SafeToApply must be true on the finding
+#   - SuggestedAction must be "delete"
+#   - Kind must not be in the hard-block list (CRD, Role, ClusterRole, etc.)
+#   - The live object must have annotation kubescrub.io/allow-delete=true
+#   - Namespace must not be excluded
+#   - --apply --yes flags are required to perform real deletions
+#
+# Install:
+#   kubectl apply -f deploy/rbac-apply.yaml
+#
+# To activate, uncomment the ClusterRoleBinding below and update the
+# user reference to match your kubeconfig user or group.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubescrub-system
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: apply
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubescrub-apply
+  namespace: kubescrub-system
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: apply
+---
+# ClusterRole kubescrub-apply — minimal permissions for apply-mode deletion.
+#
+# Only get, list, and delete on the resource types that the apply command
+# supports: batch/jobs, apps/replicasets, and core/persistentvolumeclaims.
+# Plus a get on namespaces for namespace lookups.
+#
+# No create, update, patch, bind, escalate, impersonate, or any other verbs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubescrub-apply
+  labels:
+    app.kubernetes.io/name: kubescrub
+    app.kubernetes.io/component: apply
+rules:
+  # ── batch jobs ────────────────────────────────────────────────────
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "delete"]
+
+  # ── apps replicasets ──────────────────────────────────────────────
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "delete"]
+
+  # ── core persistentvolumeclaims ───────────────────────────────────
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "delete"]
+
+  # ── namespace get (for exclusion checks) ──────────────────────────
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+
+---
+# ── ClusterRoleBinding for kubescrub-apply ──────────────────────────
+#
+# Uncomment and update the user reference to bind this ClusterRole to
+# a kubeconfig user or group.
+#
+# IMPORTANT: This is a SEPARATE identity from kubescrub-scan.
+# The scan ServiceAccount (kubescrub-scan) must NOT be used for apply.
+#
+# Example: kubectl --user=alice@company.com kubescrub apply --plan plan.json --apply --yes
+# Or:      kubectl --as=system:serviceaccount:kubescrub-system:kubescrub-apply kubescrub apply --plan plan.json --apply --yes
+#
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: kubescrub-apply-binding
+#   labels:
+#     app.kubernetes.io/name: kubescrub
+#     app.kubernetes.io/component: apply
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: kubescrub-apply
+# subjects:
+#   - kind: User
+#     name: "<YOUR_KUBECONFIG_USER>"       # replace with your kubeconfig user
+#     apiGroup: rbac.authorization.k8s.io
+#
+# To bind to a group instead:
+#   - kind: Group
+#     name: "<YOUR_GROUP>"
+#     apiGroup: rbac.authorization.k8s.io
