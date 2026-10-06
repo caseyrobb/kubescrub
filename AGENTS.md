@@ -89,6 +89,7 @@ Guard rules:
 - Dry-run (`--apply` not set) → never deletes; guards only warn
 
 Examples:
+
 ```
 kubescrub apply --plan report.json --checks workload,pvc
 kubescrub apply --plan report.json --reason completed-job
@@ -97,6 +98,7 @@ kubescrub apply --plan report.json --max-plan-age 1h --context kind-dev
 ```
 
 Plan JSON structure:
+
 ```json
 {
   "apiVersion": "kubescrub.io/v1",
@@ -175,3 +177,7 @@ Kube context: `kind-kubescrub-dev`
 Fixture: `testdata/clusters/messy.yaml`
 Kind policy overlay: `testdata/clusters/policy-kind.yaml`
 Never use Docker as the Kind provider in docs, scripts, or shell commands.
+
+## OpenShift
+
+Read docs/openshift.md before adding an OpenShift checker. Package path is internal/checks/openshift/<name>. Register it like the other checks. If route.openshift.io is not discovered, return no findings and no error. Do not delete Routes, Subscriptions, CatalogSources, OperatorGroups, DeploymentConfigs, or the current CSV.
