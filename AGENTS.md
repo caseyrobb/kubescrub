@@ -54,6 +54,16 @@ make kind-test     # go test -tags=kind ./internal/app/...
 
 The current `opencode.jsonc` contains a private endpoint (`http://spark.redcomet.ca:8000/v1`) and must be gitignored.
 
+### Kubeconfig precedence
+
+KubeScrub follows kubectl's kubeconfig precedence (set via `--kubeconfig` flag and/or the `KUBECONFIG` env variable):
+
+1. `--kubeconfig` flag, if set.
+2. `KUBECONFIG` environment variable (colon-separated list on Linux/macOS, same as client-go).
+3. Default `~/.kube/config`.
+
+The `--context` flag selects the context to use from the loaded file; without it, the file's `current-context` is used. Both `scan` and `apply` commands use the same resolution.
+
 ### Plan document
 
 Plans are versioned JSON documents using `kubescrub.io/v1`. The `scan` command

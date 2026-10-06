@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/caseyrobb/kubescrub/internal/apply"
 	"github.com/caseyrobb/kubescrub/internal/checks"
@@ -18,6 +17,8 @@ import (
 
 func NewRoot() *cobra.Command {
 	var policyPath string
+	var kubeconfig string
+	var context string
 
 	cmd := &cobra.Command{
 		Use:   "kubescrub",
@@ -26,14 +27,16 @@ func NewRoot() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&policyPath, "policy", "policy.yaml", "Path to policy configuration file")
+	cmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "", "Path to the kubeconfig file to use")
+	cmd.PersistentFlags().StringVar(&context, "context", "", "Kube context to use (overrides the file's current-context)")
 
-	cmd.AddCommand(newScanCmd(&policyPath))
-	cmd.AddCommand(newApplyCmd(&policyPath))
+	cmd.AddCommand(newScanCmd(&policyPath, &kubeconfig, &context))
+	cmd.AddCommand(newApplyCmd(&policyPath, &kubeconfig, &context))
 
 	return cmd
 }
 
-func newScanCmd(policyPath *string) *cobra.Command {
+func newScanCmd(policyPath, kubeconfig, context *string) *cobra.Command {
 	var outputFormat string
 	var outPath string
 	var namespaces string
@@ -70,8 +73,17 @@ Examples:
 				return fmt.Errorf("load policy: %w", err)
 			}
 
-			// Build Kubernetes client.
-			k8sClient, err := kube.NewClient()
+			// Resolve kubeconfig path (flag > KUBECONFIG > default).
+			kubeconfigPath := kube.ResolveKubeconfigPath(*kubeconfig)
+
+			// Resolve the current context from the selected kubeconfig.
+			currentContext, err := kube.ResolveCurrentContext(*kubeconfig)
+			if err != nil {
+				return fmt.Errorf("resolve kubeconfig context: %w", err)
+			}
+
+			// Build Kubernetes client using the resolved config.
+			k8sClient, err := kube.NewClient(kubeconfigPath, *context)
 			if err != nil {
 				return fmt.Errorf("build kubernetes client: %w", err)
 			}
@@ -82,15 +94,8 @@ Examples:
 				nsFilter = strings.Split(namespaces, ",")
 			}
 
-			// Build the check Runtime using the current kubeconfig context name.
-			loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-			configOverrides := &clientcmd.ConfigOverrides{}
-			kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-			rawConfig, err := kubeConfig.RawConfig()
-			if err != nil {
-				return fmt.Errorf("resolve kubeconfig context: %w", err)
-			}
-			clusterID := rawConfig.CurrentContext
+			// Use the resolved current-context as the cluster identifier.
+			clusterID := currentContext
 			if clusterID == "" {
 				clusterID = k8sClient.Config.Host // fallback to API server URL
 			}
@@ -165,8 +170,6 @@ Examples:
 	cmd.Flags().StringVar(&outputFormat, "format", "", "Output format (default \"json\")")
 	cmd.Flags().StringVar(&outPath, "out", "", "Write plan document to FILE instead of stdout")
 	cmd.Flags().StringVar(&namespaces, "namespaces", "", "Comma-separated list of namespaces to scan (empty means all)")
-
-	_ = policyPath // used via PersistentFlags on root
 
 	return cmd
 }

@@ -63,7 +63,7 @@ func validateApply(plan *apply.Plan, realApply, yes bool,
 	return nil
 }
 
-func newApplyCmd(policyPath *string) *cobra.Command {
+func newApplyCmd(policyPath, kubeconfig, context *string) *cobra.Command {
 	var planPath string
 	var realApply bool
 	var yes bool
@@ -71,7 +71,6 @@ func newApplyCmd(policyPath *string) *cobra.Command {
 	var reasons string
 	var namespace string
 	var maxPlanAge time.Duration
-	var context string
 
 	cmd := &cobra.Command{
 		Use:   "apply",
@@ -134,7 +133,7 @@ Examples:
 			}
 
 			// Validate apply-mode safety gates (age, context).
-			if err := validateApply(plan, realApply, yes, maxPlanAge, context); err != nil {
+			if err := validateApply(plan, realApply, yes, maxPlanAge, *context); err != nil {
 				return err
 			}
 
@@ -165,8 +164,9 @@ Examples:
 			fmt.Fprintf(os.Stderr, "Plan: %d candidates for apply, %d skipped\n",
 				len(planResult.Candidates), len(planResult.SkippedReasons))
 
-			// Build kubernetes client.
-			k8sClient, err := kube.NewClient()
+			// Resolve kubeconfig path and build client.
+			kubeconfigPath := kube.ResolveKubeconfigPath(*kubeconfig)
+			k8sClient, err := kube.NewClient(kubeconfigPath, *context)
 			if err != nil {
 				return fmt.Errorf("build kubernetes client: %w", err)
 			}
@@ -201,7 +201,6 @@ Examples:
 	cmd.Flags().StringVar(&reasons, "reason", "", "Comma-separated list of finding reasons to include (default all)")
 	cmd.Flags().StringVar(&namespace, "namespace", "", "Only include findings in this exact namespace (cluster-scoped kept)")
 	cmd.Flags().DurationVar(&maxPlanAge, "max-plan-age", 24*time.Hour, "Maximum age of the scan plan (default 24h)")
-	cmd.Flags().StringVar(&context, "context", "", "Required kube context to match plan.cluster")
 
 	cmd.MarkFlagRequired("plan")
 

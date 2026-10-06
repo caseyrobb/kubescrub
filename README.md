@@ -63,6 +63,8 @@ kubescrub scan --policy my-policy.yaml
 | `--out` | stdout | Write Plan JSON to FILE |
 | `--namespaces` | all | Comma-separated list of namespaces to scan |
 | `--format` | json | Output format (only `json` is supported) |
+| `--kubeconfig` | _(see below)_ | Path to kubeconfig file |
+| `--context` | _(see below)_ | Kube context to use |
 
 ## Apply
 
@@ -79,6 +81,7 @@ kubescrub apply --plan plan.json --apply --yes
 kubescrub apply --plan plan.json --checks workload,pvc --apply --yes
 kubescrub apply --plan plan.json --reason completed-job --apply --yes
 kubescrub apply --plan plan.json --namespace kubescrub-messy --apply --yes
+kubescrub apply --plan plan.json --context kind-dev --apply --yes
 ```
 
 | Flag | Default | Description |
@@ -102,7 +105,15 @@ Real deletion (`--apply --yes`) **refuses** when any guard is violated:
 
 Dry-run mode continues with warnings only.
 
-## RBAC identities
+## Kubeconfig
+
+KubeScrub respects the same kubeconfig precedence as kubectl. Set `--kubeconfig` to override the file path, or use `--context` to select a specific context from the loaded file:
+
+1. `--kubeconfig` flag, if set.
+2. `KUBECONFIG` environment variable (colon-separated list on Linux/macOS).
+3. Default `~/.kube/config`.
+
+The `--context` flag selects the context to use; without it, the loaded file's `current-context` is used.
 
 Install least-privilege ClusterRoles for scan and apply operations:
 
