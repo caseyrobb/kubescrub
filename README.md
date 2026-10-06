@@ -131,6 +131,21 @@ kubectl apply -f deploy/rbac-apply.yaml
 
 See [`deploy/rbac-scan.yaml`](deploy/rbac-scan.yaml) and [`deploy/rbac-apply.yaml`](deploy/rbac-apply.yaml) for full manifests. Uncomment the `ClusterRoleBinding` sections to bind them to users or service accounts.
 
+## OpenShift
+
+OpenShift checks are included but run only when their API groups are present. They skip silently on plain Kubernetes.
+
+- **route** — flags Routes targeting missing Services, port mismatches, or Services with no ready endpoints. Never deletes Routes.
+- **csv** — flags ClusterServiceVersions not named by any Subscription and stuck Failed/Pending CSVs. The current CSV is never a delete candidate.
+
+Install the optional ClusterRole for OpenShift scanning:
+
+```bash
+kubectl apply -f deploy/rbac-scan.yaml   # includes kubescrub-scan-openshift
+```
+
+See [`docs/openshift.md`](docs/openshift.md) for full details.
+
 ## Podman Kind (testing)
 
 ```bash
